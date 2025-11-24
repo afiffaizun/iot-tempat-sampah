@@ -1,0 +1,123 @@
+#include <ESP32Servo.h>
+
+
+// Pin Ultrasonik
+const int trigPin = 25;
+const int echoPin = 26;
+
+
+// Pin Servo
+const int servoPin = 14;
+
+
+long duration;
+int distance;
+
+
+Servo myServo;
+
+
+// Threshold jarak
+int openThreshold  = 15;   // < 15 cm → buka
+int closeThreshold = 22;   // > 22 cm → tutup
+
+
+bool isOpen = false;
+
+
+// Fungsi baca jarak stabil (3 kali baca)
+int getStableDistance() {
+  long sum = 0;
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+
+
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+
+    duration = pulseIn(echoPin, HIGH, 20000);
+    int d = duration * 0.034 / 2;
+    sum += d;
+
+
+    delay(10);
+  }
+
+
+  int avg = sum / 3;
+  // Filter noise
+  if (avg <= 0 || avg > 200) return 999;
+  return avg;
+}
+
+
+// Gerakan servo halus
+void moveServoSmooth(int startAngle, int endAngle) {
+  if (startAngle < endAngle) {
+    for (int pos = startAngle; pos <= endAngle; pos++) {
+      myServo.write(pos);
+      delay(5);
+    }
+  } else {
+    for (int pos = startAngle; pos >= endAngle; pos--) {
+      myServo.write(pos);
+      delay(5);
+    }
+  }
+}
+
+
+void setup() {
+  Serial.begin(115200);
+
+
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT_PULLDOWN);
+
+
+  // Timer PWM untuk servo
+  ESP32PWM::allocateTimer(0);
+  ESP32PWM::allocateTimer(1);
+  ESP32PWM::allocateTimer(2);
+  ESP32PWM::allocateTimer(3);
+
+
+  myServo.setPeriodHertz(50);
+  myServo.attach(servoPin, 500, 2400);
+  myServo.write(0);  // posisi awal tutup
+}
+
+
+void loop() {
+  distance = getStableDistance();
+
+
+  Serial.print("Jarak: ");
+  Serial.print(distance);
+Serial.println(" cm");
+
+
+  // BUKA
+  if (!isOpen && distance < openThreshold) {
+    Serial.println("Tangan terdeteksi → membuka...");
+    moveServoSmooth(0, 90);
+    isOpen = true;
+    delay(2000);  // jeda stabil
+  }
+
+
+  // TUTUP
+  if (isOpen && distance > closeThreshold) {
+    Serial.println("Menutup tutup...");
+    moveServoSmooth(90, 0);
+    isOpen = false;
+    delay(500);
+  }
+
+
+  delay(100);
+}
+
