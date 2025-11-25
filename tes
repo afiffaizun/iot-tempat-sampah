@@ -1,29 +1,22 @@
 #include <ESP32Servo.h>
 
-
 // Pin Ultrasonik
 const int trigPin = 25;
 const int echoPin = 26;
 
-
 // Pin Servo
 const int servoPin = 14;
-
 
 long duration;
 int distance;
 
-
 Servo myServo;
-
 
 // Threshold jarak
 int openThreshold  = 15;   // < 15 cm → buka
 int closeThreshold = 22;   // > 22 cm → tutup
 
-
 bool isOpen = false;
-
 
 // Fungsi baca jarak stabil (3 kali baca)
 int getStableDistance() {
@@ -32,27 +25,23 @@ int getStableDistance() {
     digitalWrite(trigPin, LOW);
     delayMicroseconds(2);
 
-
     digitalWrite(trigPin, HIGH);
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
-
 
     duration = pulseIn(echoPin, HIGH, 20000);
     int d = duration * 0.034 / 2;
     sum += d;
 
-
     delay(10);
   }
 
-
   int avg = sum / 3;
+
   // Filter noise
   if (avg <= 0 || avg > 200) return 999;
   return avg;
 }
-
 
 // Gerakan servo halus
 void moveServoSmooth(int startAngle, int endAngle) {
@@ -69,14 +58,11 @@ void moveServoSmooth(int startAngle, int endAngle) {
   }
 }
 
-
 void setup() {
   Serial.begin(115200);
 
-
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT_PULLDOWN);
-
 
   // Timer PWM untuk servo
   ESP32PWM::allocateTimer(0);
@@ -84,21 +70,17 @@ void setup() {
   ESP32PWM::allocateTimer(2);
   ESP32PWM::allocateTimer(3);
 
-
   myServo.setPeriodHertz(50);
   myServo.attach(servoPin, 500, 2400);
   myServo.write(0);  // posisi awal tutup
 }
 
-
 void loop() {
   distance = getStableDistance();
 
-
   Serial.print("Jarak: ");
   Serial.print(distance);
-Serial.println(" cm");
-
+  Serial.println(" cm");
 
   // BUKA
   if (!isOpen && distance < openThreshold) {
@@ -108,7 +90,6 @@ Serial.println(" cm");
     delay(2000);  // jeda stabil
   }
 
-
   // TUTUP
   if (isOpen && distance > closeThreshold) {
     Serial.println("Menutup tutup...");
@@ -117,7 +98,5 @@ Serial.println(" cm");
     delay(500);
   }
 
-
   delay(100);
 }
-
