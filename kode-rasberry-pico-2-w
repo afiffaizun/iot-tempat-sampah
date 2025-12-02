@@ -1,0 +1,89 @@
+import machine
+import time
+from machine import Pin, PWM
+
+#HC-SR04 
+
+class HCSR04:
+    def __init__(self, trigger_pin, echo_pin, echo_timeout_us=30000):
+        self.trigger = Pin(trigger_pin, Pin.OUT)
+        self.echo = Pin(echo_pin, Pin.IN)
+        self.echo_timeout_us = echo_timeout_us
+        self.trigger.value(0)
+
+    def _send_pulse_and_wait(self):
+        self.trigger.value(0)
+        time.sleep_us(5)
+        self.trigger.value(1)
+        time.sleep_us(10)
+        self.trigger.value(0)
+
+        try:
+            pulse_time = machine.time_pulse_us(self.echo, 1, self.echo_timeout_us)
+            return pulse_time
+        except OSError:
+            return -1
+
+    def distance_cm(self):
+        pulse_time = self._send_pulse_and_wait()
+        if pulse_time < 0:
+            return 999
+        return (pulse_time / 2) / 29.1
+
+#SERVO Class
+
+class Servo:
+    def __init__(self, pin, freq=50):
+        self.pwm = PWM(Pin(pin))
+        self.pwm.freq(freq)
+
+    def write(self, angle):
+        # 0.5ms → 2.5ms = 500–2500µs
+        min_us = 500
+        max_us = 2500
+        us = min_us + (max_us - min_us) * angle / 180
+        duty = int(us / 20000 * 65535)
+        self.pwm.duty_u16(duty)
+
+
+# ===========================
+#      SMART TRASH BIN
+# ===========================
+
+# SENSOR & SERVO PIN
+sensor = HCSR04(trigger_pin=5, echo_pin=18)
+servo = Servo(pin=15)
+
+# KONFIGURASI
+OPEN_ANGLE = 90        # sudut servo ketika tutup membuka
+CLOSE_ANGLE = 0        # sudut servo ketika tutup menutup
+DETECT_DISTANCE = 20   # cm → tangan terdeteksi
+AUTO_CLOSE_DELAY = 3   # detik
+
+# STATE
+is_open = False
+last_open_time = 0
+
+# Tutup tempat sampah awalnya tertutup
+servo.write(CLOSE_ANGLE)
+time.sleep(1)
+
+while True:
+    jarak = sensor.distance_cm()
+    print("Jarak:", jarak, "cm")
+
+    # ==== BUKA TUTUP DENGAN SENSOR ====
+    if jarak < DETECT_DISTANCE:
+        if not is_open:
+            print("Tangan terdeteksi → Membuka tutup")
+            servo.write(OPEN_ANGLE)
+            is_open = True
+            last_open_time = time.time()
+
+    # ==== MENUTUP OTOMATIS ====
+    if is_open and (time.time() - last_open_time > AUTO_CLOSE_DELAY):
+        print("Menutup otomatis")
+        servo.write(CLOSE_ANGLE)
+        is_open = False
+
+    time.sleep(0.1)
