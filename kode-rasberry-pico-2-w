@@ -1,50 +1,44 @@
 import time
 from machine import Pin, PWM
 
-
 # ==============================
-# CLASS SERVO
+# SERVO DENGAN GERAK SMOOTH
 # ==============================
 class Servo:
-    """Simple 9g servo control for Raspberry Pi Pico."""
-
-    def __init__(self, pin: int or Pin or PWM, minVal=2500, maxVal=7500):
-        if isinstance(pin, int):
-            pin = Pin(pin, Pin.OUT)
-
-        if isinstance(pin, Pin):
-            self.__pwm = PWM(pin)
-        elif isinstance(pin, PWM):
-            self.__pwm = pin
-
-        self.__pwm.freq(50)
+    def __init__(self, pin, minVal=2500, maxVal=7500):
+        pin = Pin(pin, Pin.OUT)
+        self.pwm = PWM(pin)
+        self.pwm.freq(50)
         self.minVal = minVal
         self.maxVal = maxVal
+        self.current_angle = 0  # posisi awal servo
 
-    def goto(self, value: int):
-        if value < 0:
-            value = 0
-        if value > 1024:
-            value = 1024
+    # Gerakan smooth dari sudut sekarang menuju sudut target
+    def smooth_angle(self, target, step=2, delay=0.01):
+        target = max(0, min(180, target))
+        if target > self.current_angle:
+            for angle in range(self.current_angle, target + 1, step):
+                self._move(angle)
+                time.sleep(delay)
+        else:
+            for angle in range(self.current_angle, target - 1, -step):
+                self._move(angle)
+                time.sleep(delay)
+        self.current_angle = target
 
-        delta = self.maxVal - self.minVal
-        target = int(self.minVal + ((value / 1024) * delta))
-
-        self.__pwm.duty_u16(target)
-
-    def free(self):
-        self.__pwm.duty_u16(0)
+    def _move(self, degree):
+        duty = int(self.minVal + (degree / 180) * (self.maxVal - self.minVal))
+        self.pwm.duty_u16(duty)
 
 
 # ==============================
-# CLASS HCSR04
+# HC-SR04
 # ==============================
 class HCSR04:
-    def __init__(self, trigger_pin, echo_pin, echo_timeout_us=30000):
-        self.trigger = Pin(trigger_pin, Pin.OUT)
-        self.echo = Pin(echo_pin, Pin.IN)
-        self.echo_timeout_us = echo_timeout_us
-        self.trigger.value(0)
+    def __init__(self, trigger, echo, timeout=30000):
+        self.trigger = Pin(trigger, Pin.OUT)
+        self.echo = Pin(echo, Pin.IN)
+        self.timeout = timeout
 
     def distance_cm(self):
         self.trigger.value(0)
@@ -53,45 +47,65 @@ class HCSR04:
         time.sleep_us(10)
         self.trigger.value(0)
 
-        pulse_time = time.pulse_us(self.echo, 1, self.echo_timeout_us)
+        start = time.ticks_us()
+        while self.echo.value() == 0:
+            if time.ticks_diff(time.ticks_us(), start) > self.timeout:
+                return -1
+        
+        start = time.ticks_us()
+        while self.echo.value() == 1:
+            if time.ticks_diff(time.ticks_us(), start) > self.timeout:
+                return -1
 
-        if pulse_time < 0:
-            return -1  # Timeout
-
-        distance = (pulse_time * 0.0343) / 2
-        return distance
+        durasi = time.ticks_diff(time.ticks_us(), start)
+        return (durasi * 0.0343) / 2
 
 
 # ==============================
-# PROGRAM UTAMA
+# PIN SETUP
 # ==============================
-
-servo = Servo(0)            # Servo pada GP0
-sensor = HCSR04(2, 3)       # Trigger GP2, Echo GP3
-
-CLOSE_ANGLE = 0         # Tutup
-OPEN_ANGLE = 90         # Buka
-
-def servo_Angle(angle):
-    if angle < 0:
-        angle = 0
-    if angle > 180:
-        angle = 180
-    servo.goto(int((angle / 180) * 1024))
+servo = Servo(0)            # GP0
+sensor = HCSR04(2, 3)       # GP2 trigger, GP3 echo
 
 
-print("Tempat Sampah Otomatis Aktif...")
+# ==============================
+# KONFIGURASI GERAK
+# ==============================
+BUKA = 90
+TUTUP = 0
+AMBA_THRESHOLD = 15  # tangan dekat
+servo.smooth_angle(TUTUP)  # posisi awal tutup
+
+
+# ==============================
+# MAIN LOOP
+# ==============================
+print("Tempat Sampah IoT Smooth Aktif...")
 
 while True:
-    jarak = sensor.distance_cm()
+    try:
+        jarak = sensor.distance_cm()
 
-    if jarak > 0:
-        print("Jarak:", jarak, "cm")
+        if jarak != -1 and jarak < 200:
+            print("Jarak:", round(jarak, 1), "cm")
 
-        if jarak <= 15:        # Objek dekat → buka
-            servo_Angle(OPEN_ANGLE)
-            time.sleep(2)
-        else:                  # Objek jauh → tutup
-            servo_Angle(CLOSE_ANGLE)
+            # ------------------------------------------
+            # Jika tangan berada di depan sensor → buka
+            # ------------------------------------------
+            if jarak <= AMBA_THRESHOLD and servo.current_angle != BUKA:
+                print("Membuka tutup (smooth)...")
+                servo.smooth_angle(BUKA, step=2, delay=0.015)
 
-    time.sleep(0.1)
+            # ------------------------------------------
+            # Jika tangan tidak ada → tutup
+            # ------------------------------------------
+            if jarak > AMBA_THRESHOLD and servo.current_angle != TUTUP:
+                print("Menutup tutup (smooth)...")
+                servo.smooth_angle(TUTUP, step=2, delay=0.015)
+
+        time.sleep(0.1)
+
+    except OSError:
+        print("Sensor error!")
+        time.sleep(0.2)
+
