@@ -1,15 +1,16 @@
-#include <WiFi.h>
-#include <WiFiClient.h>
-#include <BlynkSimpleEsp32.h>
-#include <ESP32Servo.h>
 
 #define BLYNK_TEMPLATE_ID "TMPL6JymvQgS0"
 #define BLYNK_TEMPLATE_NAME "Monitoring ESP32"
 #define BLYNK_AUTH_TOKEN "gbzEi61A3nh4gQyRjYgARmOw8L8LSFI3"
 
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+#include <ESP32Servo.h>
+
 // ====== WiFi ======
-char ssid[] = "WIFI_KAMU";
-char pass[] = "PASSWORD_WIFI";
+char ssid[] = "iotsampah";
+char pass[] = "12345678";
 
 // ====== Ultrasonic Pins ======
 const int trigPin = 25;
