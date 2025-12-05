@@ -1,14 +1,21 @@
-#define BLYNK_TEMPLATE_ID "TMPL6JymvQgS0"
-#define BLYNK_TEMPLATE_NAME "Monitoring  ESP32"
-#define BLYNK_AUTH_TOKEN "gbzEi61A3nh4gQyRjYgARmOw8L8LSFI3"
-
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
 #include <ESP32Servo.h>
 
-// Pin Ultrasonik
+#define BLYNK_TEMPLATE_ID "TMPL6JymvQgS0"
+#define BLYNK_TEMPLATE_NAME "Monitoring ESP32"
+#define BLYNK_AUTH_TOKEN "gbzEi61A3nh4gQyRjYgARmOw8L8LSFI3"
+
+// ====== WiFi ======
+char ssid[] = "WIFI_KAMU";
+char pass[] = "PASSWORD_WIFI";
+
+// ====== Ultrasonic Pins ======
 const int trigPin = 25;
 const int echoPin = 26;
 
-// Pin Servo
+// ====== Servo Pin ======
 const int servoPin = 14;
 
 long duration;
@@ -16,16 +23,17 @@ int distance;
 
 Servo myServo;
 
-// Threshold jarak
-int openThreshold  = 15;   // < 15 cm → buka
-int closeThreshold = 22;   // > 22 cm → tutup
+// Threshold
+int openThreshold  = 15;  // < 15cm → buka
+int closeThreshold = 22;  // > 22cm → tutup
 
 bool isOpen = false;
 
-// Fungsi baca jarak stabil (3 kali baca)
+// ====== Baca jarak 3 kali, ambil rata-rata ======
 int getStableDistance() {
   long sum = 0;
   for (int i = 0; i < 3; i++) {
+
     digitalWrite(trigPin, LOW);
     delayMicroseconds(2);
 
@@ -41,13 +49,11 @@ int getStableDistance() {
   }
 
   int avg = sum / 3;
-
-  // Filter noise
   if (avg <= 0 || avg > 200) return 999;
   return avg;
 }
 
-// Gerakan servo halus
+// ====== Servo smooth ======
 void moveServoSmooth(int startAngle, int endAngle) {
   if (startAngle < endAngle) {
     for (int pos = startAngle; pos <= endAngle; pos++) {
@@ -66,9 +72,9 @@ void setup() {
   Serial.begin(115200);
 
   pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT_PULLDOWN);
+  pinMode(echoPin, INPUT);
 
-  // Timer PWM untuk servo
+  // ====== Servo setup ======
   ESP32PWM::allocateTimer(0);
   ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2);
@@ -76,29 +82,45 @@ void setup() {
 
   myServo.setPeriodHertz(50);
   myServo.attach(servoPin, 500, 2400);
-  myServo.write(0);  // posisi awal tutup
+  myServo.write(0);
+
+  // ====== Blynk connect ======
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 }
 
 void loop() {
+  Blynk.run();
+
   distance = getStableDistance();
 
   Serial.print("Jarak: ");
   Serial.print(distance);
   Serial.println(" cm");
 
-  // BUKA
+  // Kirim jarak ke Blynk → V0
+  Blynk.virtualWrite(V0, distance);
+
+  // ====== BUKA ======
   if (!isOpen && distance < openThreshold) {
     Serial.println("Tangan terdeteksi → membuka...");
     moveServoSmooth(0, 90);
     isOpen = true;
-    delay(2000);  // jeda stabil
+
+    // Kirim status ke Blynk → V1
+    Blynk.virtualWrite(V1, "OPEN");
+
+    delay(2000);
   }
 
-  // TUTUP
+  // ====== TUTUP ======
   if (isOpen && distance > closeThreshold) {
     Serial.println("Menutup tutup...");
     moveServoSmooth(90, 0);
     isOpen = false;
+
+    // Kirim status ke Blynk → V1
+    Blynk.virtualWrite(V1, "CLOSE");
+
     delay(500);
   }
 
