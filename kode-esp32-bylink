@@ -1,0 +1,4 @@
+#define BLYNK_TEMPLATE_ID "TMPL6JymvQgS0"
+#define BLYNK_TEMPLATE_NAME "Monitoring  ESP32"
+#define BLYNK_AUTH_TOKEN "gbzEi61A3nh4gQyRjYgARmOw8L8LSFI3"
+
