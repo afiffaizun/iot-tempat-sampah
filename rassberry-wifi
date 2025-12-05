@@ -6,39 +6,40 @@ from machine import Pin, PWM
 # ==============================
 # BLYNK CONFIG
 # ==============================
-BLYNK_TEMPLATE_ID = "TMPL6QECFnGOR"
-BLYNK_DEVICE_NAME = "Monitoring Use Rassberry Pico"
-BLYNK_AUTH = "CG5dls7AMphT4OjJiJfzeVpfjvhd8O2Z"
-
-BLYNK_URL = f"http://blynk.cloud/external/api/update?token={BLYNK_AUTH}"
+BLYNK_AUTH = "VPn5ayLQ2epVeX0h-wGem92m8F498mzV"
+BLYNK_URL = "http://blynk.cloud/external/api/update?"
 
 # ==============================
-# WIFI CONNECT
+# WI-FI CONFIG
 # ==============================
-def connect_wifi(ssid, password):
+WIFI_SSID = "YOUR_WIFI"
+WIFI_PASS = "YOUR_PASSWORD"
+
+def wifi_connect():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    wlan.connect(ssid, password)
+    wlan.connect(WIFI_SSID, WIFI_PASS)
 
-    print("Menghubungkan WiFi", ssid)
+    print("Menyambungkan WiFi...")
     while not wlan.isconnected():
-        time.sleep(0.3)
+        time.sleep(0.5)
         print(".", end="")
-    print("\nWiFi Connected:", wlan.ifconfig())
+    print("\nWiFi Tersambung:", wlan.ifconfig())
+
+wifi_connect()
 
 # ==============================
-# SEND DATA TO BLYNK
+# SEND DATA KE BLYNK
 # ==============================
 def blynk_send(pin, value):
     try:
-        url = f"{BLYNK_URL}&{pin}={value}"
-        urequests.get(url)
+        url = f"{BLYNK_URL}token={BLYNK_AUTH}&{pin}={value}"
+        urequests.get(url).close()
     except:
         print("Gagal kirim ke Blynk")
 
-
 # ==============================
-# SERVO
+# SERVO DENGAN GERAK SMOOTH
 # ==============================
 class Servo:
     def __init__(self, pin, minVal=2500, maxVal=7500):
@@ -47,7 +48,7 @@ class Servo:
         self.pwm.freq(50)
         self.minVal = minVal
         self.maxVal = maxVal
-        self.current_angle = 0
+        self.current_angle = 0  # posisi awal servo
 
     def smooth_angle(self, target, step=2, delay=0.01):
         target = max(0, min(180, target))
@@ -66,7 +67,7 @@ class Servo:
         self.pwm.duty_u16(duty)
 
 # ==============================
-# HC-SR04
+# HC-SR04 SENSOR
 # ==============================
 class HCSR04:
     def __init__(self, trigger, echo, timeout=30000):
@@ -100,46 +101,44 @@ class HCSR04:
 servo = Servo(0)
 sensor = HCSR04(2, 3)
 
+# ==============================
+# KONFIGURASI GERAK
+# ==============================
 BUKA = 90
 TUTUP = 0
-THRESHOLD = 15
+AMBA_THRESHOLD = 15
 
 servo.smooth_angle(TUTUP)
 
 # ==============================
-# WIFI CONNECT
-# ==============================
-connect_wifi("NAMA_WIFI", "PASSWORD_WIFI")
-
-
-print("Tempat Sampah IoT + Blynk Aktif...\n")
-
-# ==============================
 # MAIN LOOP
 # ==============================
+print("Tempat Sampah IoT + Blynk Aktif...")
+
 while True:
-    jarak = sensor.distance_cm()
+    try:
+        jarak = sensor.distance_cm()
 
-    if jarak != -1 and jarak < 200:
-        print("Jarak:", round(jarak, 1), "cm")
+        if jarak != -1 and jarak < 200:
+            print("Jarak:", round(jarak, 1), "cm")
 
-        # --- kirim jarak ke Blynk ---
-        blynk_send("V0", round(jarak, 1))
+            # Kirim jarak ke Blynk V1
+            blynk_send("V1", round(jarak, 1))
 
-        # --------------------------
-        # BUKA
-        # --------------------------
-        if jarak <= THRESHOLD and servo.current_angle != BUKA:
-            print("Membuka...")
-            servo.smooth_angle(BUKA)
-            blynk_send("V1", 1)   # status buka
+            # Jika tangan mendekat → buka
+            if jarak <= AMBA_THRESHOLD and servo.current_angle != BUKA:
+                print("Membuka tutup...")
+                servo.smooth_angle(BUKA, step=2, delay=0.015)
+                blynk_send("V2", 1)  # Status buka
 
-        # --------------------------
-        # TUTUP
-        # --------------------------
-        if jarak > THRESHOLD and servo.current_angle != TUTUP:
-            print("Menutup...")
-            servo.smooth_angle(TUTUP)
-            blynk_send("V1", 0)   # status tutup
+            # Jika tangan menjauh → tutup
+            if jarak > AMBA_THRESHOLD and servo.current_angle != TUTUP:
+                print("Menutup tutup...")
+                servo.smooth_angle(TUTUP, step=2, delay=0.015)
+                blynk_send("V2", 0)  # Status tutup
 
-    time.sleep(0.1)
+        time.sleep(0.1)
+
+    except OSError:
+        print("Sensor error!")
+        time.sleep(0.2)
