@@ -12,8 +12,8 @@ BLYNK_URL = "http://blynk.cloud/external/api/update?"
 # ==============================
 # WI-FI CONFIG
 # ==============================
-WIFI_SSID = "YOUR_WIFI"
-WIFI_PASS = "YOUR_PASSWORD"
+WIFI_SSID = "iotsampah"
+WIFI_PASS = "12345678"
 
 def wifi_connect():
     wlan = network.WLAN(network.STA_IF)
